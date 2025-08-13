@@ -78,3 +78,58 @@ class Database:
         
         logger.info(f"\n🎉 Successfully saved {successful_inserts}/{len(vendors)} vendors!")
         return successful_inserts
+
+    def get_vendors_with_embeddings(self) -> List[Dict[str, Any]]:
+        """
+        Retrieve all vendors that have embeddings from the database.
+        
+        Returns:
+            List[Dict[str, Any]]: List of vendor data with embeddings.
+        """
+        try:
+            connection = self.get_connection()
+            cursor = connection.cursor(dictionary=True)
+            
+            query = """
+                SELECT place_id, name, formatted_address, rating, user_rating_count, 
+                       website_uri, national_phone, international_phone, google_maps_uri,
+                       specialties, embedding, primary_type, business_types, latitude, longitude
+                FROM gurugram_decoration_vendors 
+                WHERE embedding IS NOT NULL
+                ORDER BY rating DESC
+            """
+            cursor.execute(query)
+            vendors = cursor.fetchall()
+            
+            cursor.close()
+            connection.close()
+            
+            logger.info(f"📊 Retrieved {len(vendors)} vendors with embeddings")
+            return vendors
+            
+        except Exception as e:
+            logger.error(f"❌ Error retrieving vendors with embeddings: {e}")
+            return []
+
+    def count_vendors(self) -> int:
+        """
+        Count total number of vendors in the database.
+        
+        Returns:
+            int: Total number of vendors.
+        """
+        try:
+            connection = self.get_connection()
+            cursor = connection.cursor()
+            
+            cursor.execute("SELECT COUNT(*) FROM gurugram_decoration_vendors")
+            count = cursor.fetchone()[0]
+            
+            cursor.close()
+            connection.close()
+            
+            return count
+            
+        except Exception as e:
+            logger.error(f"❌ Error counting vendors: {e}")
+            return 0

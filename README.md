@@ -1,13 +1,43 @@
 # AI Event Planner
 
-A modular Python application for collecting, enriching, and storing event vendor data. This project uses Google Places API for vendor information and Gemini Embedding API for text embeddings.
+A modular Python application for collecting, enriching, and storing event vendor data. This project uses Google Places API for vendor information and Gemini Embedding API for text embeddings. **Now with AI-powered event planning functionality!**
 
 ## Features
 
-- Search for decoration vendors using Google Places API
-- Generate embeddings using Gemini embedding-001 model with built-in rate limiting (100 RPM)
-- Store vendor data with embeddings in a TiDB database
-- Modular architecture for maintainability and extensibility
+- 🏪 Search for decoration vendors using Google Places API
+- 🧠 Generate embeddings using Gemini embedding-001 model with built-in rate limiting (100 RPM)
+- 💾 Store vendor data with embeddings in a TiDB database
+- 🎯 **NEW: AI Event Planning** - Describe your event and get personalized vendor recommendations
+- 🔍 **Smart Search** - Convert event descriptions to optimized search queries using Gemini LLM
+- 📊 **Similarity Matching** - Find top 20 vendors using embedding similarity scores
+- 🏗️ Modular architecture for maintainability and extensibility
+
+## New Event Planning Functionality
+
+### Quick Start for Event Planning
+
+```bash
+# Simple CLI for event planning
+python plan_event.py "birthday party for 8-year-old with superhero theme"
+
+# Or run interactively
+python plan_event.py
+```
+
+### How It Works
+
+1. **Describe Your Event**: Tell the AI what kind of event you want to organize
+2. **Smart Query Generation**: Gemini LLM converts your description into an optimized search query
+3. **Embedding Similarity**: The system finds vendors whose descriptions are most similar to your needs
+4. **Top 20 Results**: Get ranked vendor recommendations with similarity scores
+
+### Example Event Types
+
+- `"corporate conference for 200 people with modern decorations"`
+- `"outdoor wedding reception with floral arrangements"`
+- `"baby shower with pastel color theme"`
+- `"birthday party for 5-year-old with princess theme"`
+- `"anniversary celebration with elegant decorations"`
 
 ## Project Structure
 
@@ -25,14 +55,16 @@ ai-event-planner/
 │   │   ├── vendor.py          # Vendor data model
 │   │   └── __init__.py
 │   ├── services/
-│   │   ├── vendor_collector.py # Main service coordination
+│   │   ├── vendor_collector.py # Vendor collection service
+│   │   ├── event_planner.py   # NEW: AI event planning service
 │   │   └── __init__.py
 │   ├── utils/
 │   │   ├── config.py          # Configuration settings
 │   │   ├── logger.py          # Logging utilities
 │   │   └── __init__.py
 │   └── __init__.py
-├── collect_vendors_gemini.py  # Main script
+├── main.py                    # Main script with menu options
+├── plan_event.py              # NEW: Simple CLI for event planning
 ├── requirements.txt           # Project dependencies
 └── README.md
 ```

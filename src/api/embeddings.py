@@ -110,7 +110,7 @@ class GeminiEmbeddingsAPI:
             time.sleep(sleep_time)
         
     def generate_embedding(self, text: Union[str, List[str]],
-                           output_dimensionality: Optional[int] = None) -> Optional[Union[List[float], List[List[float]]]]:
+                           output_dimensionality: Optional[int] = 1536) -> Optional[Union[List[float], List[List[float]]]]:
         """
         Generate embeddings for text using Google Gemini Embeddings API.
         
