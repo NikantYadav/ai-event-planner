@@ -130,3 +130,5 @@ class GeminiEmbeddingsAPI:
             normalized = embedding_np / norm
             return normalized.tolist()
         return embedding
+
+    
