@@ -4,8 +4,8 @@ import time
 import numpy as np
 import threading
 
-from src.utils.logger import get_logger
-from src.utils.config import Config
+from utils.logger import get_logger
+from utils.config import Config
 
 logger = get_logger(__name__)
 
@@ -58,24 +58,6 @@ class GeminiEmbeddingsAPI:
                            output_dimensionality: Optional[int] = 1536) -> Optional[Union[List[float], List[List[float]]]]:
         """
         Generate embeddings for text using Google Gemini Embeddings API.
-        
-        Args:
-            text (Union[str, List[str]]): The text or texts to generate embedding(s) for.
-            task_type (Optional[str]): The task type to optimize embeddings for. Defaults to SEMANTIC_SIMILARITY.
-                Other options include:
-                - CLASSIFICATION: For classifying texts
-                - CLUSTERING: For clustering texts
-                - RETRIEVAL_DOCUMENT: For document search
-                - RETRIEVAL_QUERY: For search queries
-                - CODE_RETRIEVAL_QUERY: For code search
-                - QUESTION_ANSWERING: For QA systems
-                - FACT_VERIFICATION: For fact-checking
-            output_dimensionality (Optional[int]): The size of output embedding vector.
-                Recommended values: 768, 1536, 3072 (default)
-        
-        Returns:
-            Optional[Union[List[float], List[List[float]]]]: The embedding(s) as a list of floats or list of lists,
-            or None if an error occurs.
         """
         try:
             # Apply rate limiting - consume a token from the bucket
@@ -123,32 +105,24 @@ class GeminiEmbeddingsAPI:
                     # Handle multiple embeddings
                     embeddings_list = [emb['values'] for emb in result['embeddings']]
                     
-                    # If output_dimensionality is provided and not 3072, normalize the embeddings
                     if output_dimensionality and output_dimensionality != 3072:
                         embeddings_list = [self._normalize_embedding(emb) for emb in embeddings_list]
                         
                     return embeddings_list[0] if len(embeddings_list) == 1 and isinstance(text, str) else embeddings_list
                 else:
-                    logger.error(f"❌ Unexpected response structure from Gemini API: {result}")
+                    logger.error(f" Unexpected response from Gemini API: {result}")
                     return None
             else:
-                logger.error(f"❌ Gemini API error: {response.status_code} - {response.text}")
+                logger.error(f"Gemini API error: {response.status_code} - {response.text}")
                 return None
                 
         except Exception as e:
-            logger.error(f"❌ Error generating Gemini embedding: {e}")
+            logger.error(f"Error generating Gemini embedding: {e}")
             return None
             
     def _normalize_embedding(self, embedding: List[float]) -> List[float]:
         """
         Normalize an embedding vector to have unit norm (length of 1).
-        This is recommended for embeddings with dimensions other than 3072.
-        
-        Args:
-            embedding (List[float]): The embedding vector to normalize.
-            
-        Returns:
-            List[float]: The normalized embedding vector.
         """
         embedding_np = np.array(embedding)
         norm = np.linalg.norm(embedding_np)

@@ -11,6 +11,7 @@ class Config:
     """Configuration class for application-wide settings."""
     
     # Google Maps API settings
+    GOOGLE_PLACES_BASE_URL="https://places.googleapis.com/v1/places:searchText"
     GOOGLE_MAPS_API_KEY = os.getenv('GOOGLE_MAPS_API_KEY')
     
     # Gemini API settings
@@ -20,6 +21,7 @@ class Config:
     # Voyage AI API settings
     EMBEDDING_MODEL = 'voyage-3.5'
     VOYAGE_API_KEY = os.getenv('VOYAGE_API_KEY')
+
 
     # Database settings
     DB_CONFIG = {
