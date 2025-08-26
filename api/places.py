@@ -1,6 +1,3 @@
-"""
-Google Places API integration for retrieving vendor data.
-"""
 import requests
 import time
 from typing import Dict, Any, List
@@ -27,7 +24,7 @@ class GooglePlacesAPI:
         headers = {
             'Content-Type': 'application/json',
             'X-Goog-Api-Key': self.api_key,
-            'X-Goog-FieldMask': self.field_mask
+            'X-Goog-FieldMask': "places.id"
         }
         # Use provided location bias or default to Gurugram bounds
         if not location_bias:
@@ -55,6 +52,32 @@ class GooglePlacesAPI:
             logger.error(f"'{query}': {e}")
             return []
 
+    def get_place_details(self, place_id: str) -> Dict[str, Any]:
+        """
+        Get detailed information about a specific place using its Place ID.
+        """
+        url = f"https://places.googleapis.com/v1/places/{place_id}"
+        
+        headers = {
+            'Content-Type': 'application/json',
+            'X-Goog-Api-Key': self.api_key,
+            'X-Goog-FieldMask': 'displayName,reviews,generativeSummary,primaryType,types'
+        }
+        
+        try:
+            logger.info(f"Fetching details for place: {place_id}")
+            response = requests.get(url, headers=headers)
+            
+            if response.status_code == 200:
+                return response.json()
+            else:
+                logger.error(f"API error: {response.status_code} - {response.text}")
+                return {}
+                
+        except Exception as e:
+            logger.error(f"Error fetching details for place '{place_id}': {e}")
+            return {}
+
 #check if works
 import json
 
@@ -65,14 +88,15 @@ def main():
     query = "Banquet hall in Gurugram"
     
     # Call the search method
-    results = api.search_places(query)
-    
+    #results = api.search_places(query)
+    results = api.get_place_details("ChIJEe-pDbYeDTkRmu3RMlwjWNY")
     # Print results
     if results:
-        print(f"✅ Found {len(results)} places for query: '{query}'")
-        for i, place in enumerate(results[:5], start=1):  # Show first 5 results
-            print(f"\n=== Result {i} ===")
-            print(json.dumps(place, indent=2))  # Pretty print full JSON
+        print(f"Results : {results}")
+        # print(f"✅ Found {len(results)} places for query: '{query}'")
+        # for i, place in enumerate(results[:5], start=1):  # Show first 5 results
+        #     print(f"\n=== Result {i} ===")
+        #     print(json.dumps(place, indent=2))  # Pretty print full JSON
     else:
         print("⚠️ No results found or error occurred.")
 
