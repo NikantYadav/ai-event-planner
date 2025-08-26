@@ -39,7 +39,6 @@ def convert_places_to_embeddings(places_data: List[dict]) -> List[Tuple[List[flo
             if embedding:
                 results.append((embedding, place_id))
                 logger.info(f"Generated embedding for place: {name} (ID: {place_id})")
-                logger.info(f"Embedding: {embedding}")
             else:
                 logger.warning(f"Failed to generate embedding for place: {name} (ID: {place_id})")
                 
