@@ -132,7 +132,9 @@ class GooglePlacesAPI:
                 
                 detail_resp = requests.get(detail_url, headers=detail_headers)
                 if detail_resp.status_code == 200:
-                    detailed_results.append(detail_resp.json())
+                    detail_data=detail_resp.json()
+                    detail_data["place_id"]=place_id
+                    detailed_results.append(detail_data)
                 else:
                     logger.warning(f"⚠️ Could not fetch details for {place_id}: {detail_resp.text}")
             
