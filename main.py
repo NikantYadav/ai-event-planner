@@ -3,9 +3,12 @@ import re
 from typing import Dict, List, Any
 from controllers.llm_calls import GeminiLLM
 from controllers.places import GooglePlacesAPI
+from controllers.embeddings import GeminiEmbeddingsAPI
+from db.place_embeddings_store import store_places_to_tidb
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
+
 def llm_vendor_type(user_event_description):
     """
     Analyze event description and return required vendor categories in JSON format
@@ -141,6 +144,63 @@ def places_api_call(search_queries: List[Dict[str, Any]], location: str = None) 
         logger.error(f"places_api_call failed: {e}", exc_info=True)
         return []
 
+def semantic_match(user_event_description, places_data: List[Dict[str, Any]], limit: int = 10) -> Dict[str, List[str]]:
+    """
+    User input + vendor combination vector match/ranking
+    """
+    try:
+        # Generate embedding for user input
+        embedding_api = GeminiEmbeddingsAPI()
+        user_input_embedding = embedding_api.generate_embedding(user_event_description)
+        if not user_input_embedding:
+            logger.error("Failed to generate embedding for user input")
+            return {}
+        
+        # Group places by vendor_type
+        vendor_groups = {}
+        for place in places_data:
+            vendor_type = place.get("vendor_type")
+            place_id = place.get("place_id")
+            
+            if vendor_type and place_id:
+                if vendor_type not in vendor_groups:
+                    vendor_groups[vendor_type] = []
+                vendor_groups[vendor_type].append(place_id)
+        
+        logger.info(f"Found {len(vendor_groups)} vendor types with places")
+        
+        # Import the function here to avoid circular imports
+        from controllers.place_embeddings import find_nearest_embeddings
+        from db.tidb_vector_store import TiDBVectorStore
+        
+        # For each vendor type, find nearest embeddings
+        results = {}
+        
+        for vendor_type, place_ids in vendor_groups.items():
+            try:
+                logger.info(f"Finding nearest embeddings for vendor type: {vendor_type} ({len(place_ids)} candidates)")
+                
+                # Search only within the specific vendor group's place_ids
+                nearest_place_ids = find_nearest_embeddings(
+                    user_input_embedding, 
+                    limit=limit, 
+                    filter_place_ids=place_ids
+                )
+                
+                results[vendor_type] = nearest_place_ids
+                
+                logger.info(f"Found {len(results[vendor_type])} nearest places for {vendor_type}")
+                
+            except Exception as e:
+                logger.error(f"Error finding nearest embeddings for vendor type '{vendor_type}': {e}")
+                results[vendor_type] = []
+        
+        return results
+        
+    except Exception as e:
+        logger.error(f"Error in semantic_match: {e}")
+        return {}
+
 
 if __name__ == "__main__":
     user_event_description = """We’re launching a new eco-friendly skincare brand in New York City.
@@ -159,8 +219,32 @@ if __name__ == "__main__":
             location = 'New York City, United States'
             # Call the places API with the generated queries
             places_results = places_api_call(search_queries, location)
+            output_file = "places_results.json"
+            with open(output_file, "w", encoding="utf-8") as f:
+                json.dump(places_results, f, indent=2, ensure_ascii=False)
             print(f"\nFound {len(places_results)} places total")
-            print("Places Results:", json.dumps(places_results, indent=20))
+            
+            # Store places data in TiDB for semantic matching
+            if places_results:
+                print("\nStoring places data in TiDB...")
+                successful, failed = store_places_to_tidb(places_results)
+                print(f"Stored {successful} places successfully, {failed} failed")
+                
+                # Perform semantic matching
+                print("\nPerforming semantic matching...")
+                semantic_results = semantic_match(user_event_description, places_results, limit=10)
+                
+                print("\nSemantic Matching Results:")
+                for vendor_type, place_ids in semantic_results.items():
+                    print(f"\n{vendor_type}:")
+                    for i, place_id in enumerate(place_ids, 1):
+                        # Find the place name for better readability
+                        place_name = "Unknown"
+                        for place in places_results:
+                            if place.get("place_id") == place_id:
+                                place_name = place.get("displayName", {}).get("text", "Unknown")
+                                break
+                        print(f"  {i}. {place_name} (ID: {place_id})")
 
     except Exception as e:
         print(f"An error occurred: {e}")

@@ -71,3 +71,76 @@ class TiDBVectorStore:
             connection.close()
             
         return successful, failed
+    
+    def fetch_embedding_by_id(self, place_id: str) -> Tuple[str, List[float]] | None:
+        """Fetch embedding and ID for a specific place_id"""
+        connection = self.get_connection()
+        cursor = connection.cursor()
+        
+        try:
+            query = f"""
+            SELECT place_id, embedding 
+            FROM {self.table_name} 
+            WHERE place_id = %s
+            """
+            
+            cursor.execute(query, (place_id,))
+            result = cursor.fetchone()
+            
+            if result:
+                place_id, embedding_str = result
+                # Convert TiDB VECTOR format back to list of floats
+                embedding_str = embedding_str.strip('[]')
+                embedding = [float(x.strip()) for x in embedding_str.split(',')]
+                
+                logger.info(f"Retrieved embedding for place_id: {place_id}")
+                return place_id, embedding
+            else:
+                logger.warning(f"No embedding found for place_id: {place_id}")
+                return None
+                
+        except mysql.connector.Error as err:
+            logger.error(f"Error fetching embedding for {place_id}: {err}")
+            return None
+        finally:
+            cursor.close()
+            connection.close()
+    
+    def search_embeddings_by_ids(self, place_ids: List[str]) -> List[Tuple[str, List[float]]]:
+        """Fetch embeddings for multiple place_ids"""
+        connection = self.get_connection()
+        cursor = connection.cursor()
+        
+        results = []
+        
+        try:
+            if not place_ids:
+                logger.warning("No place_ids provided for search")
+                return results
+            
+            # Create placeholders for IN clause
+            placeholders = ','.join(['%s'] * len(place_ids))
+            query = f"""
+            SELECT place_id, embedding 
+            FROM {self.table_name} 
+            WHERE place_id IN ({placeholders})
+            """
+            
+            cursor.execute(query, place_ids)
+            rows = cursor.fetchall()
+            
+            for place_id, embedding_str in rows:
+                # Convert TiDB VECTOR format back to list of floats
+                embedding_str = embedding_str.strip('[]')
+                embedding = [float(x.strip()) for x in embedding_str.split(',')]
+                results.append((place_id, embedding))
+            
+            logger.info(f"Retrieved {len(results)} embeddings out of {len(place_ids)} requested")
+            return results
+            
+        except mysql.connector.Error as err:
+            logger.error(f"Error searching embeddings: {err}")
+            return results
+        finally:
+            cursor.close()
+            connection.close()
