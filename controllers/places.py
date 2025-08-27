@@ -27,9 +27,9 @@ class GooglePlacesAPI:
             'X-Goog-FieldMask': "places.id"
         }
         
-        # Use provided location bias or default to Gurugram bounds
         if not location_bias:
-            location_bias = {"rectangle": Config.GURUGRAM_BOUNDS}
+            logger.error("No location bias provided")
+            return None
         
         data = {
             "textQuery": query,
@@ -72,4 +72,50 @@ class GooglePlacesAPI:
         except Exception as e:
             logger.error(f"Error searching '{query}': {e}")
             return []
+
+    def get_location_bounds(self, place_name: str) -> Dict[str, Dict[str, float]]:
+        """
+        Fetch bounding box for a given place using Nominatim (OpenStreetMap) API.
+        """
+        url = "https://nominatim.openstreetmap.org/search.php"
+        params = {
+            "q": place_name,
+            "format": "json",
+
+        }
+        
+        try:
+            response = requests.get(url, params=params, headers={"User-Agent": "GooglePlacesAPI/1.0"})
+            
+            if response.status_code != 200:
+                logger.error(f"Nominatim API error: {response.status_code} - {response.text}")
+                return {}
+            
+            results = response.json()
+            if not results:
+                logger.warning(f"No bounding box found for '{place_name}'")
+                return {}
+            
+            # Pick the "best" result (highest importance)
+            best_match = max(results, key=lambda x: x.get("importance", 0))
+            bbox = best_match.get("boundingbox", None)
+            
+            if not bbox or len(bbox) != 4:
+                logger.warning(f"No valid bounding box for '{place_name}'")
+                return {}
+            
+            # Nominatim gives: [south_lat, north_lat, west_lon, east_lon]
+            south_lat, north_lat, west_lon, east_lon = map(float, bbox)
+            
+            bounds = {
+                "low": {"latitude": south_lat, "longitude": west_lon},
+                "high": {"latitude": north_lat, "longitude": east_lon}
+            }
+            
+            return bounds
+        
+        except Exception as e:
+            logger.error(f"Error fetching bounds for '{place_name}': {e}")
+            return {}
+
 

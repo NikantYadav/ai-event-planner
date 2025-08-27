@@ -1,6 +1,6 @@
 from typing import List, Tuple
 from .tidb_vector_store import TiDBVectorStore
-from api.place_embeddings import convert_places_to_embeddings
+from controllers.place_embeddings import convert_places_to_embeddings
 from utils.logger import get_logger
 
 logger = get_logger(__name__)

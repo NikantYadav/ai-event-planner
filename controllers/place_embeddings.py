@@ -1,6 +1,6 @@
 from typing import List, Tuple
-from api.embeddings import GeminiEmbeddingsAPI
-from api.places import GooglePlacesAPI 
+from controllers.embeddings import GeminiEmbeddingsAPI
+from controllers.places import GooglePlacesAPI 
 from utils.logger import get_logger
 import json
 logger = get_logger(__name__)
