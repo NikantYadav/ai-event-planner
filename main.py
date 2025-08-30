@@ -220,14 +220,84 @@ def semantic_match(user_event_description, places_data: List[Dict[str, Any]], li
         logger.error(f"Error in semantic_match: {e}")
         return {}
 
+def generate_event_plan(semantic_results: Dict[str, List[str]], places_data: List[Dict[str, Any]], user_event_description: str) -> str:
+    """
+    Takes semantic match results, selects top 2 from each category, and generates a comprehensive event plan using LLM
+    """
+    try:
+        logger.info("Generating comprehensive event plan...")
+        
+        # Create a mapping of place_id to place details for quick lookup
+        place_lookup = {place.get("place_id"): place for place in places_data}
+        
+        # Select top 2 results from each category and format for LLM
+        selected_vendors = {}
+        vendor_details_text = ""
+        
+        for vendor_type, place_ids in semantic_results.items():
+            # Take top 2 results from each category
+            top_places = place_ids[:2]
+            selected_vendors[vendor_type] = top_places
+            
+            vendor_details_text += f"\n{vendor_type.upper()}:\n"
+            
+            for i, place_id in enumerate(top_places, 1):
+                place = place_lookup.get(place_id)
+                if place:
+                    name = place.get("displayName", {}).get("text", "Unknown")
+                    address = place.get("formattedAddress", "Address not available")
+                    rating = place.get("rating", "No rating")
+                    phone = place.get("nationalPhoneNumber", "Phone not available")
+                    website = place.get("websiteUri", "Website not available")
+                    
+                    vendor_details_text += f"  Option {i}: {name}\n"
+                    vendor_details_text += f"    Address: {address}\n"
+                    vendor_details_text += f"    Rating: {rating}\n"
+                    vendor_details_text += f"    Phone: {phone}\n"
+                    vendor_details_text += f"    Website: {website}\n\n"
+        
+        # Create comprehensive prompt for event planning
+        prompt = f"""You are an expert Event Planner with years of experience in organizing successful events. 
+        
+        Your task is to create a comprehensive, step-by-step event plan that the user can easily follow to execute their event successfully without facing any problems.
+
+        USER EVENT DESCRIPTION:
+        {user_event_description}
+
+        RECOMMENDED VENDORS (Top 2 options for each category):
+        {vendor_details_text}
+
+        INSTRUCTIONS:
+        1. Create a detailed, chronological event plan with clear phases (Planning, Pre-Event, Event Day, Post-Event)
+        2. For each vendor category, recommend which option to choose and why
+        3. Include specific timelines, deadlines, and action items
+        4. Provide contingency plans for potential issues
+        5. Include budget considerations and cost-saving tips
+        6. Add coordination tips between different vendors
+        7. Include a final checklist for the event day
+
+        Make the plan actionable, specific, and easy to follow. Include contact information for recommended vendors where available.
+        """
+        
+        # Generate the event plan using LLM
+        llm = GeminiLLM()
+        event_plan = llm.generate(prompt, temperature=0.3)
+        
+        if event_plan:
+            logger.info("Successfully generated comprehensive event plan")
+            return event_plan
+        else:
+            logger.error("Failed to generate event plan")
+            return "Error: Could not generate event plan. Please try again."
+            
+    except Exception as e:
+        logger.error(f"Error generating event plan: {e}")
+        return f"Error generating event plan: {str(e)}"
+
+
 
 if __name__ == "__main__":
-    user_event_description = """We’re launching a new eco-friendly skincare brand in New York City.
-    Budget: $15,000.
-    We want a trendy but affordable venue, maybe a rooftop or loft, for about 50–70 attendees including influencers and press.
-    The theme should be natural and minimalist, with lots of greenery and neutral colors.
-    We’ll need catering with healthy snacks and drinks, a photographer, and a space for product displays.
-    The vibe should be Instagrammable and on-brand."""
+    user_event_description = """A minimalist wellness studio with calming décor and plants. Guests do a hands-on skincare activity, enjoy light vegetarian catering, and take home gift bags."""
     try:
         print("🚀 Starting multithreaded event planning pipeline...")
         
@@ -272,6 +342,22 @@ if __name__ == "__main__":
                                 place_name = place.get("displayName", {}).get("text", "Unknown")
                                 break
                         print(f"  {i}. {place_name} (ID: {place_id})")
+                
+                # Generate comprehensive event plan
+                print("\n📋 Generating comprehensive event plan...")
+                event_plan = generate_event_plan(semantic_results, places_results, user_event_description)
+                
+                # Save event plan to file
+                plan_file = "event_plan.md"
+                with open(plan_file, "w", encoding="utf-8") as f:
+                    f.write(event_plan)
+                print(f"✅ Event plan saved to {plan_file}")
+                
+                # Display a preview of the event plan
+                print("\n📋 EVENT PLAN PREVIEW:")
+                print("=" * 50)
+                print(event_plan[:500] + "..." if len(event_plan) > 500 else event_plan)
+                print("=" * 50)
                         
                 print(f"\n🎉 Pipeline completed successfully with multithreading!")
 
