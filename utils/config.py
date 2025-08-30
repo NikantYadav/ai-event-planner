@@ -11,6 +11,7 @@ class Config:
     """Configuration class for application-wide settings."""
     
     # Google Maps API settings
+    GOOGLE_PLACES_BASE_URL="https://places.googleapis.com/v1/places:searchText"
     GOOGLE_MAPS_API_KEY = os.getenv('GOOGLE_MAPS_API_KEY')
     
     # Gemini API settings
@@ -20,6 +21,7 @@ class Config:
     # Voyage AI API settings
     EMBEDDING_MODEL = 'voyage-3.5'
     VOYAGE_API_KEY = os.getenv('VOYAGE_API_KEY')
+
 
     # Database settings
     DB_CONFIG = {
@@ -46,3 +48,6 @@ class Config:
         "low": {"latitude": 28.3500, "longitude": 76.9000},
         "high": {"latitude": 28.5500, "longitude": 77.1500}
     }
+    
+    # Rate limiting
+    RPM = 60  # Requests per minute for API calls
