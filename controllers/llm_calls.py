@@ -4,6 +4,10 @@ import google.generativeai as genai
 from google.generativeai.types import GenerationConfig
 from dotenv import load_dotenv
 from utils.logger import get_logger
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import List, Dict, Any, Optional
+import time
+from utils.config import Config
 
 load_dotenv()
 GEMINI_MODEL = os.getenv('GEMINI_MODEL')
@@ -25,7 +29,6 @@ class GeminiLLM:
         except Exception as e:
             logger.error(f"Failed to initialize Gemini LLM: {e}")
             
-    
     def generate(self, prompt, temperature=None, max_tokens=None):
         """Generate content from prompt"""
         try:
@@ -49,3 +52,31 @@ class GeminiLLM:
             logger.error(f"Error generating content: {e}")
             return None
     
+    def generate_batch(self, prompts: List[str], max_workers: int = 5) -> List[Optional[str]]:
+        """Generate content for multiple prompts concurrently"""
+        if not prompts:
+            return []
+        
+        results = [None] * len(prompts)
+        
+        def generate_single(index: int, prompt: str) -> tuple:
+            time.sleep(60 / Config.RPM)  # Simple rate limiting based on RPM
+            result = self.generate(prompt)
+            return (index, result)
+        
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_index = {
+                executor.submit(generate_single, i, prompt): i 
+                for i, prompt in enumerate(prompts)
+            }
+            
+            for future in as_completed(future_to_index):
+                try:
+                    index, result = future.result()
+                    results[index] = result
+                except Exception as e:
+                    index = future_to_index[future]
+                    logger.error(f"Error processing batch item {index}: {e}")
+                    results[index] = None
+        
+        return results

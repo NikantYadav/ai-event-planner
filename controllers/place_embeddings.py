@@ -7,20 +7,17 @@ import json
 logger = get_logger(__name__)
 
 def convert_places_to_embeddings(places_data: List[dict]) -> List[Tuple[List[float], str]]:
-    """
-    Convert places API results to embeddings.
+    """Convert places API results to embeddings using multithreading."""
+    if not places_data:
+        return []
     
-    Returns: List of (embedding, place_id) tuples
-    """
     embeddings_api = GeminiEmbeddingsAPI()
-    results = []
     
+    # Prepare text data and place IDs
+    texts_and_ids = []
     for place in places_data:
         try:
-            # Get place_id from the data
             place_id = place.get('place_id', '')
-            
-            # Extract text fields
             name = place.get('displayName', {}).get('text', '')
             primary_type = place.get('primaryType', '')
             types = ', '.join(place.get('types', []))
@@ -35,25 +32,37 @@ def convert_places_to_embeddings(places_data: List[dict]) -> List[Tuple[List[flo
             
             # Combine all text
             combined_text = f"{name} {primary_type} {types} {reviews_text}".strip()
+            texts_and_ids.append((combined_text, place_id, name))
             
-            # Generate embedding
-            embedding = embeddings_api.generate_embedding(combined_text)
-            if embedding:
-                results.append((embedding, place_id))
-                logger.info(f"Generated embedding for place: {name} (ID: {place_id})")
-            else:
-                logger.warning(f"Failed to generate embedding for place: {name} (ID: {place_id})")
-                
         except Exception as e:
-            logger.error(f"Error processing place: {e}")
+            logger.error(f"Error processing place data: {e}")
+    
+    if not texts_and_ids:
+        logger.warning("No valid place data to process")
+        return []
+    
+    # Extract texts for batch processing
+    texts = [item[0] for item in texts_and_ids]
+    
+    # Generate embeddings in batch
+    logger.info(f"Generating embeddings for {len(texts)} places...")
+    embeddings = embeddings_api.generate_embeddings_batch(texts)
+    
+    # Combine results
+    results = []
+    for i, (text, place_id, name) in enumerate(texts_and_ids):
+        embedding = embeddings[i]
+        if embedding:
+            results.append((embedding, place_id))
+            logger.debug(f"Generated embedding for place: {name} (ID: {place_id})")
+        else:
+            logger.warning(f"Failed to generate embedding for place: {name} (ID: {place_id})")
     
     logger.info(f"Generated embeddings for {len(results)}/{len(places_data)} places")
     return results
 
 def find_nearest_embeddings(target_embedding: List[float], limit: int = 10, filter_place_ids: List[str] = None) -> List[str]:
-    """
-    Find the nearest embeddings to a target embedding using TiDB vector similarity search.
-    """
+    """Find the nearest embeddings to a target embedding using TiDB vector similarity search."""
     vector_store = TiDBVectorStore()
     connection = vector_store.get_connection()
     cursor = connection.cursor()

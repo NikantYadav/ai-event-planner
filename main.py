@@ -1,11 +1,13 @@
 import json 
 import re
 from typing import Dict, List, Any
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from controllers.llm_calls import GeminiLLM
 from controllers.places import GooglePlacesAPI
 from controllers.embeddings import GeminiEmbeddingsAPI
 from db.place_embeddings_store import store_places_to_tidb
 from utils.logger import get_logger
+from utils.config import Config
 
 logger = get_logger(__name__)
 
@@ -87,16 +89,13 @@ def generate_vendor_search_queries(vendor_data: Dict[str, Any]) -> Dict[str, Any
         return None
 
 def places_api_call(search_queries: List[Dict[str, Any]], location: str = None) -> List[Dict[str, Any]]:
-    """
-    Returns a list of place details for all queries.
-    """
+    """Returns a list of place details for all queries using multithreading."""
     if not search_queries:
         logger.warning("No search queries provided")
         return []
     
     places_api = GooglePlacesAPI()
-    logger.info("Places API called on each query")
-    all_results = []
+    logger.info(f"Places API called on {len(search_queries)} queries using multithreading")
 
     try:
         # Fetch location bounds if location provided
@@ -113,14 +112,16 @@ def places_api_call(search_queries: List[Dict[str, Any]], location: str = None) 
         # Wrap in Google API expected format
         location_bias = {"rectangle": location_bias}
 
-        # Process each query
-        for query_item in search_queries:
+        all_results = []
+        
+        def search_single_query(query_item: Dict[str, Any]) -> List[Dict[str, Any]]:
+            """Search for places for a single query"""
             vendor_type = query_item.get("vendor_type")
             query = query_item.get("query")
 
             if not query:
                 logger.warning(f"Empty query for vendor type: {vendor_type}")
-                continue
+                return []
 
             try:
                 logger.info(f"Searching for {vendor_type}: {query}")
@@ -131,11 +132,29 @@ def places_api_call(search_queries: List[Dict[str, Any]], location: str = None) 
                     place["vendor_type"] = vendor_type
                     place["search_query"] = query
 
-                all_results.extend(places)
+                return places
 
             except Exception as e:
                 logger.error(f"Error searching for vendor type '{vendor_type}' with query '{query}': {e}")
-                continue
+                return []
+
+        # Use ThreadPoolExecutor for concurrent place searches
+        
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            # Submit all search tasks
+            future_to_query = {
+                executor.submit(search_single_query, query_item): query_item 
+                for query_item in search_queries
+            }
+            
+            # Collect results as they complete
+            for future in as_completed(future_to_query):
+                try:
+                    places = future.result()
+                    all_results.extend(places)
+                except Exception as e:
+                    query_item = future_to_query[future]
+                    logger.error(f"Error processing query {query_item.get('vendor_type', 'unknown')}: {e}")
 
         logger.info(f"Found {len(all_results)} total places across all queries")
         return all_results
@@ -210,31 +229,39 @@ if __name__ == "__main__":
     We’ll need catering with healthy snacks and drinks, a photographer, and a space for product displays.
     The vibe should be Instagrammable and on-brand."""
     try:
+        print("🚀 Starting multithreaded event planning pipeline...")
+        
+        # Step 1: Analyze vendor types
+        print("\n📋 Analyzing vendor types...")
         vendor_categories = llm_vendor_type(user_event_description)
 
         if vendor_categories:
+            # Step 2: Generate search queries
+            print("\n🔍 Generating search queries...")
             search_queries = generate_vendor_search_queries(vendor_categories)
             print("Search Queries JSON:", json.dumps(search_queries, indent=2))
             
             location = 'New York City, United States'
-            # Call the places API with the generated queries
+            # Call the places API with the generated queries using multithreading
+            print(f"\n🏢 Searching places with multithreading...")
             places_results = places_api_call(search_queries, location)
+            
             output_file = "places_results.json"
             with open(output_file, "w", encoding="utf-8") as f:
                 json.dump(places_results, f, indent=2, ensure_ascii=False)
-            print(f"\nFound {len(places_results)} places total")
+            print(f"✅ Found {len(places_results)} places total")
             
-            # Store places data in TiDB for semantic matching
+            # Store places data in TiDB for semantic matching with multithreaded embeddings
             if places_results:
-                print("\nStoring places data in TiDB...")
+                print("\n💾 Storing places data in TiDB with multithreaded embeddings...")
                 successful, failed = store_places_to_tidb(places_results)
-                print(f"Stored {successful} places successfully, {failed} failed")
+                print(f"✅ Stored {successful} places successfully, {failed} failed")
                 
                 # Perform semantic matching
-                print("\nPerforming semantic matching...")
+                print("\n🎯 Performing semantic matching...")
                 semantic_results = semantic_match(user_event_description, places_results, limit=10)
                 
-                print("\nSemantic Matching Results:")
+                print("\n📊 Semantic Matching Results:")
                 for vendor_type, place_ids in semantic_results.items():
                     print(f"\n{vendor_type}:")
                     for i, place_id in enumerate(place_ids, 1):
@@ -245,7 +272,10 @@ if __name__ == "__main__":
                                 place_name = place.get("displayName", {}).get("text", "Unknown")
                                 break
                         print(f"  {i}. {place_name} (ID: {place_id})")
+                        
+                print(f"\n🎉 Pipeline completed successfully with multithreading!")
 
     except Exception as e:
-        print(f"An error occurred: {e}")
+        print(f"❌ An error occurred: {e}")
+        logger.error(f"Pipeline error: {e}", exc_info=True)
 

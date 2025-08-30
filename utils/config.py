@@ -48,3 +48,6 @@ class Config:
         "low": {"latitude": 28.3500, "longitude": 76.9000},
         "high": {"latitude": 28.5500, "longitude": 77.1500}
     }
+    
+    # Rate limiting
+    RPM = 60  # Requests per minute for API calls
