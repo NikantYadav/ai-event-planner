@@ -122,7 +122,7 @@ async def signup(user_data: UserSignup, db: Database = Depends(get_db)):
         
         return {"access_token": access_token, "token_type": "bearer", "user": serialize_user(user_doc)}
         
-    except DuplicateKeyError:
+    except DuplicateKeyError as e:
         print(e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
