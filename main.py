@@ -24,6 +24,7 @@ def llm_vendor_type(user_event_description):
     - The JSON must include "event_type" and a "vendors" array.
     - The "vendors" array should list all vendor categories relevant to the event.
     - Think broadly and include both common and uncommon vendors depending on the event requirements.
+    - Make sure not to include unnecessary vendor types like event planner, insurance, waste management etc.
 
     User Input:
     "{user_event_description}"
@@ -297,7 +298,7 @@ def generate_event_plan(semantic_results: Dict[str, List[str]], places_data: Lis
 
 
 if __name__ == "__main__":
-    user_event_description = """A minimalist wellness studio with calming décor and plants. Guests do a hands-on skincare activity, enjoy light vegetarian catering, and take home gift bags."""
+    user_event_description = """Guests do a hands-on skincare activity, enjoy light vegetarian catering"""
     try:
         print("🚀 Starting multithreaded event planning pipeline...")
         
