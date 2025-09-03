@@ -5,6 +5,7 @@ from mongo import app, get_db
 from fastapi import Depends
 from pymongo.database import Database
 from routes import auth_router
+from event_routes import event_router
 
 app = FastAPI(title="ai-event-planner API")
 
@@ -19,6 +20,9 @@ app.add_middleware(
 
 # Include authentication routes
 app.include_router(auth_router)
+
+# Include event planning routes
+app.include_router(event_router)
 
 
 class HealthResponse(BaseModel):
