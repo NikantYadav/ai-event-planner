@@ -17,6 +17,10 @@ def store_places_to_tidb(places_data: List[dict], table_name: str = "place_embed
     logger.info(f"Converting {len(places_data)} places to embeddings...")
     embeddings_data = convert_places_to_embeddings(places_data, api_keys=api_keys)
     
+    # Check if we have all the embeddings
+    if len(embeddings_data) < len(places_data):
+        logger.warning(f"Only generated {len(embeddings_data)} embeddings out of {len(places_data)} places")
+    
     if not embeddings_data:
         logger.warning("No embeddings generated")
         return 0, len(places_data)
@@ -25,4 +29,10 @@ def store_places_to_tidb(places_data: List[dict], table_name: str = "place_embed
     successful, failed = vector_store.store_embeddings(embeddings_data)
     
     logger.info(f"Processed {len(places_data)} places: {successful} stored, {failed} failed")
+    
+    # Check if any places are missing
+    missing = len(places_data) - successful
+    if missing > 0:
+        logger.warning(f"Missing embeddings for {missing} places")
+    
     return successful, failed
