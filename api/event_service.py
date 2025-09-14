@@ -59,7 +59,8 @@ class EventService:
     async def generate_event_plan(self, form_data: EventFormData, user_id: str) -> EventPlanResponse:
         """Generate a real event plan using AI pipeline"""
         try:
-            logger.info(f"Generating event plan for user {user_id}")
+            logger.info(f"Starting event plan generation for user {user_id}")
+            logger.info(f"Event type: {form_data.eventType}, Location: {form_data.location}")
             
             vendors = []
             ai_plan_text = f"Event plan for {form_data.eventType} - {form_data.description}"
@@ -74,35 +75,40 @@ class EventService:
                         logger.info(f"Using {len(api_keys)} user-provided API keys")
                     
                     # Step 1: Analyze vendor types using AI
-                    logger.info("Analyzing vendor types with AI...")
+                    logger.info("Step 1/5: Analyzing vendor types with AI...")
                     vendor_categories = llm_vendor_type(form_data.description)
+                    logger.info(f"Vendor analysis complete. Found categories: {list(vendor_categories.get('vendors', []))}")
                     
                     if vendor_categories:
                         # Step 2: Generate search queries
-                        logger.info("Generating search queries...")
+                        logger.info("Step 2/5: Generating search queries...")
                         search_queries = generate_vendor_search_queries(vendor_categories)
+                        logger.info(f"Generated {len(search_queries) if search_queries else 0} search queries")
                         
                         if search_queries:
                             # Step 3: Search for places using Google Places API
-                            logger.info(f"Searching places in {form_data.location}...")
+                            logger.info(f"Step 3/5: Searching places in {form_data.location}...")
                             places_results = places_api_call(search_queries, form_data.location)
+                            logger.info(f"Found {len(places_results) if places_results else 0} places")
                             
                             if places_results:
                                 # Step 4: Store places in TiDB and perform semantic matching
-                                logger.info("Storing places in TiDB...")
+                                logger.info("Step 4/5: Storing places in TiDB and performing semantic matching...")
                                 successful, failed = store_places_to_tidb(places_results, api_keys=api_keys)
                                 logger.info(f"Stored {successful} places, {failed} failed")
                                 
                                 # Perform semantic matching
-                                logger.info("Performing semantic matching...")
+                                logger.info("🎯 Performing semantic matching...")
                                 semantic_results = semantic_match(form_data.description, places_results, limit=6, api_keys=api_keys)
-                                
+                                logger.info(f"Semantic matching complete. Selected {len(semantic_results) if semantic_results else 0} top matches")
+
                                 # Convert places to vendor recommendations
                                 vendors = self._convert_places_to_vendors(places_results, semantic_results)
                                 
                                 # Step 5: Generate comprehensive event plan using AI
-                                logger.info("Generating AI event plan...")
+                                logger.info("Step 5/5: Generating comprehensive AI event plan...")
                                 ai_plan_text = generate_ai_plan(semantic_results, places_results, form_data.description)
+                                logger.info("AI event plan generation complete")
                             else:
                                 logger.warning("No places found from API")
                         else:
@@ -113,9 +119,10 @@ class EventService:
                     logger.error(f"AI pipeline error: {ai_error}")
                     # Continue with fallback data
             else:
-                logger.info("AI not available")
+                logger.info("AI not available, using fallback data")
             
             # Step 6: Create structured event plan
+            logger.info("Creating structured event plan...")
             event_id = str(ObjectId())
             
             # Generate timeline based on event type
@@ -174,6 +181,7 @@ class EventService:
             
             result = self.db.events.insert_one(event_doc)
             logger.info(f"Event plan stored with ID: {result.inserted_id}")
+            logger.info(f"Event plan generation completed successfully for user {user_id}")
             
             return event_plan
             

@@ -95,16 +95,65 @@ async def generate_event_plan(
             
             # Remove any empty keys
             form_data.geminiApiKeys = [key for key in api_keys if key and key.strip()]
+            
+            # Validate API key format (basic check)
+            for key in form_data.geminiApiKeys:
+                if len(key.strip()) < 20:  # Basic length check
+                    raise HTTPException(
+                        status_code=400, 
+                        detail="Invalid API key format. Please check your Gemini API keys."
+                    )
+        
+        logger.info(f"Generating event plan for {form_data.eventType} event in {form_data.location}")
         
         service = get_event_service(db)
         event_plan = await service.generate_event_plan(form_data, str(current_user["_id"]))
         
+        logger.info(f"Event plan generated successfully with ID: {event_plan.id}")
         return event_plan
-    except HTTPException:
-        raise
+        
+    except HTTPException as http_ex:
+        # Re-raise HTTP exceptions (validation errors, etc.)
+        logger.error(f"HTTP Exception: {http_ex.detail}")
+        raise http_ex
     except Exception as e:
-        # Log error
-        raise HTTPException(status_code=500, detail=f"Failed to generate event plan: {str(e)}")
+        # Log the full error for debugging
+        logger.error(f"Error generating event plan: {str(e)}", exc_info=True)
+        
+        # Provide user-friendly error messages based on error type
+        error_message = str(e).lower()
+        
+        if "timeout" in error_message or "time" in error_message:
+            raise HTTPException(
+                status_code=504, 
+                detail="Event plan generation is taking longer than expected. Please try again or use your own API keys for faster processing."
+            )
+        elif "api" in error_message and "key" in error_message:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid API key or API quota exceeded. Please check your Gemini API keys or try again later."
+            )
+        elif "rate limit" in error_message or "quota" in error_message:
+            raise HTTPException(
+                status_code=429,
+                detail="Rate limit exceeded. Please wait a few minutes before trying again, or provide your own API keys."
+            )
+        elif "network" in error_message or "connection" in error_message:
+            raise HTTPException(
+                status_code=503,
+                detail="Unable to connect to external services. Please check your internet connection and try again."
+            )
+        elif "validation" in error_message or "invalid" in error_message:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid event details provided. Please review your information and try again."
+            )
+        else:
+            # Generic error message
+            raise HTTPException(
+                status_code=500, 
+                detail="Unable to generate event plan at this time. Please try again later or contact support if the problem persists."
+            )
 
 @event_router.get("/", response_model=List[EventPlanSummary])
 async def get_event_plans(
@@ -329,28 +378,46 @@ async def update_event_guest(
 
 # Budget Management Endpoints
 @event_router.get("/{event_id}/budget", response_model=BudgetSummary)
-async def get_event_budget(event_id: str):
+async def get_event_budget(
+    event_id: str,
+    current_user=Depends(get_current_user),
+    db: Database = Depends(get_db)
+):
     """Get budget summary for a specific event"""
     try:
-        budget = await mock_event_api.get_event_budget(event_id)
+        service = get_event_service(db)
+        budget = await service.get_event_budget(event_id, str(current_user["_id"]))
         return budget
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch budget: {str(e)}")
 
 @event_router.post("/{event_id}/budget/items", response_model=BudgetItem)
-async def create_budget_item(event_id: str, item_data: BudgetItemCreate):
+async def create_budget_item(
+    event_id: str, 
+    item_data: BudgetItemCreate,
+    current_user=Depends(get_current_user),
+    db: Database = Depends(get_db)
+):
     """Add a new budget item to an event"""
     try:
-        item = await mock_event_api.create_budget_item(event_id, item_data)
+        service = get_event_service(db)
+        item = await service.create_budget_item(event_id, item_data, str(current_user["_id"]))
         return item
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create budget item: {str(e)}")
 
 @event_router.put("/{event_id}/budget/items/{item_id}", response_model=BudgetItem)
-async def update_budget_item(event_id: str, item_id: str, item_update: BudgetItemUpdate):
+async def update_budget_item(
+    event_id: str, 
+    item_id: str, 
+    item_update: BudgetItemUpdate,
+    current_user=Depends(get_current_user),
+    db: Database = Depends(get_db)
+):
     """Update a specific budget item"""
     try:
-        item = await mock_event_api.update_budget_item(event_id, item_id, item_update)
+        service = get_event_service(db)
+        item = await service.update_budget_item(event_id, item_id, item_update, str(current_user["_id"]))
         if not item:
             raise HTTPException(status_code=404, detail="Budget item not found")
         return item
