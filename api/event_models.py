@@ -92,7 +92,8 @@ class Task(BaseModel):
 class TaskCreate(BaseModel):
     title: str
     description: str
-    priority: str
+    status: str = "pending"
+    priority: str = "medium"
     category: str
     deadline: str
     assignedTo: Optional[str] = None
@@ -136,11 +137,15 @@ class VendorCreate(BaseModel):
     phone: str
     address: str
     website: Optional[str] = None
-    rating: float
-    priceRange: str
+    rating: float = 5.0
+    priceRange: str = "$$"
     description: str
     services: List[str]
-    availability: str
+    availability: str = "Available"
+    contractStatus: str = "not_contacted"
+    quotedPrice: Optional[str] = None
+    finalPrice: Optional[str] = None
+    notes: Optional[str] = None
 
 class VendorUpdate(BaseModel):
     name: Optional[str] = None
@@ -182,9 +187,15 @@ class GuestCreate(BaseModel):
     name: str
     email: str
     phone: Optional[str] = None
+    rsvpStatus: str = "pending"
     plusOne: bool = False
     dietaryRestrictions: Optional[str] = None
+    plusOneName: Optional[str] = None
+    tableAssignment: Optional[str] = None
     specialRequests: Optional[str] = None
+    invitationSent: bool = False
+    invitationSentDate: Optional[str] = None
+    rsvpDate: Optional[str] = None
 
 class GuestUpdate(BaseModel):
     name: Optional[str] = None

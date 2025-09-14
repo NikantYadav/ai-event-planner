@@ -297,288 +297,603 @@ class EventService:
             logger.error(f"Error deleting event plan {event_id}: {e}")
             return False
 
-    def _generate_fallback_vendors(self, event_type: str) -> List[VendorRecommendation]:
-        """Generate fallback vendors when AI is not available"""
-        fallback_vendors = {
-            'wedding': [
-                VendorRecommendation(
-                    id="v1", name="Elegant Gardens Venue", category="venue", rating=4.8, price="$$$",
-                    address="123 Garden Lane, City Center", phone="(555) 123-4567",
-                    website="https://elegantgardens.com",
-                    description="Beautiful outdoor venue with manicured gardens"
-                ),
-                VendorRecommendation(
-                    id="v2", name="Gourmet Catering Co.", category="catering", rating=4.7, price="$$",
-                    address="789 Chef Avenue", phone="(555) 345-6789",
-                    website="https://gourmetcatering.com",
-                    description="Premium catering service with customizable menus"
-                )
-            ],
-            'birthday': [
-                VendorRecommendation(
-                    id="v3", name="Party Palace", category="venue", rating=4.6, price="$$",
-                    address="456 Party Street", phone="(555) 234-5678",
-                    website="https://partypalace.com",
-                    description="Fun venue perfect for birthday celebrations"
-                ),
-                VendorRecommendation(
-                    id="v4", name="Sweet Treats Bakery", category="catering", rating=4.8, price="$",
-                    address="321 Cake Avenue", phone="(555) 456-7890",
-                    website="https://sweettreats.com",
-                    description="Custom cakes and party treats"
-                )
-            ]
-        }
-        
-        event_key = event_type.lower().replace(' ', '')
-        return fallback_vendors.get(event_key, fallback_vendors['birthday'])
-
-    def _convert_places_to_vendors(self, places_results: List[dict], semantic_results: Dict[str, List[str]]) -> List[VendorRecommendation]:
-        """Convert Google Places results to vendor recommendations"""
-        vendors = []
-        place_lookup = {place.get("place_id"): place for place in places_results}
-        
-        vendor_id_counter = 1
-        
-        for vendor_type, place_ids in semantic_results.items():
-            for place_id in place_ids[:2]:  # Top 2 per category
-                place = place_lookup.get(place_id)
-                if place:
-                    vendor = VendorRecommendation(
-                        id=f"v{vendor_id_counter}",
-                        name=place.get("displayName", {}).get("text", "Unknown Vendor"),
-                        category=vendor_type,
-                        rating=place.get("rating", 0.0),
-                        price=self._get_price_level(place.get("priceLevel")),
-                        address=place.get("formattedAddress", "Address not available"),
-                        phone=place.get("nationalPhoneNumber", "Phone not available"),
-                        website=place.get("websiteUri", "Website not available"),
-                        description=place.get("editorialSummary", {}).get("text", "No description available")
-                    )
-                    vendors.append(vendor)
-                    vendor_id_counter += 1
-        
-        return vendors
-
-    def _get_price_level(self, price_level: Optional[str]) -> str:
-        """Convert Google Places price level to readable format"""
-        if not price_level:
-            return "$"
-        
-        price_map = {
-            "PRICE_LEVEL_FREE": "Free",
-            "PRICE_LEVEL_INEXPENSIVE": "$",
-            "PRICE_LEVEL_MODERATE": "$$",
-            "PRICE_LEVEL_EXPENSIVE": "$$$",
-            "PRICE_LEVEL_VERY_EXPENSIVE": "$$$$"
-        }
-        
-        return price_map.get(price_level, "$")
-
-    def _generate_timeline(self, event_type: str, event_date: str) -> List[TimelineItem]:
-        """Generate timeline based on event type"""
-        timeline_templates = {
-            'wedding': [
-                {'months': 6, 'task': 'Book venue and send save-the-dates', 'status': 'priority'},
-                {'months': 4, 'task': 'Finalize catering and photography', 'status': 'upcoming'},
-                {'months': 3, 'task': 'Send formal invitations', 'status': 'upcoming'},
-                {'months': 2, 'task': 'Confirm all vendors', 'status': 'upcoming'},
-                {'months': 1, 'task': 'Final headcount and details', 'status': 'upcoming'},
-                {'weeks': 1, 'task': 'Final rehearsal and setup', 'status': 'upcoming'}
-            ],
-            'birthday': [
-                {'months': 1, 'task': 'Plan theme and guest list', 'status': 'priority'},
-                {'weeks': 3, 'task': 'Send invitations', 'status': 'upcoming'},
-                {'weeks': 2, 'task': 'Order decorations and cake', 'status': 'upcoming'},
-                {'weeks': 1, 'task': 'Confirm RSVPs and finalize details', 'status': 'upcoming'},
-                {'days': 2, 'task': 'Prepare venue and decorations', 'status': 'upcoming'}
-            ],
-            'corporate': [
-                {'months': 3, 'task': 'Secure venue and set agenda', 'status': 'priority'},
-                {'months': 2, 'task': 'Arrange catering and AV equipment', 'status': 'upcoming'},
-                {'weeks': 6, 'task': 'Send invitations to attendees', 'status': 'upcoming'},
-                {'months': 1, 'task': 'Confirm speakers and presentations', 'status': 'upcoming'},
-                {'weeks': 1, 'task': 'Final headcount and logistics', 'status': 'upcoming'}
-            ]
-        }
-        
-        event_type_key = event_type.lower().replace(' ', '')
-        template = timeline_templates.get(event_type_key, timeline_templates['birthday'])
-        
-        timeline = []
-        for i, item in enumerate(template):
-            if 'months' in item:
-                time_desc = f"{item['months']} month{'s' if item['months'] > 1 else ''} before"
-            elif 'weeks' in item:
-                time_desc = f"{item['weeks']} week{'s' if item['weeks'] > 1 else ''} before"
-            else:
-                time_desc = f"{item['days']} day{'s' if item['days'] > 1 else ''} before"
+    # Task Management Methods
+    async def get_event_tasks(self, event_id: str, user_id: str) -> List[Task]:
+        """Get all tasks for a specific event"""
+        try:
+            tasks = list(self.db.tasks.find({
+                "event_id": ObjectId(event_id),
+                "user_id": ObjectId(user_id)
+            }))
             
-            timeline_item = TimelineItem(
-                id=f"timeline_{i}",
-                time=time_desc,
-                task=item['task'],
-                status=item['status'],
-                description=item['task'],
-                deadline=time_desc
+            return [Task(
+                id=str(task["_id"]),
+                title=task.get("title", ""),
+                description=task.get("description", ""),
+                status=task.get("status", "pending"),
+                priority=task.get("priority", "medium"),
+                category=task.get("category", ""),
+                deadline=task.get("deadline", ""),
+                assignedTo=task.get("assigned_to", ""),
+                createdAt=task.get("created_at", datetime.now().isoformat()),
+                updatedAt=task.get("updated_at", datetime.now().isoformat())
+            ) for task in tasks]
+            
+        except Exception as e:
+            logger.error(f"Error fetching tasks for event {event_id}: {e}")
+            return []
+
+    async def create_event_task(self, event_id: str, user_id: str, task_data: TaskCreate) -> Task:
+        """Create a new task for an event"""
+        try:
+            now = datetime.now().isoformat()
+            task_doc = {
+                "_id": ObjectId(),
+                "event_id": ObjectId(event_id),
+                "user_id": ObjectId(user_id),
+                "title": task_data.title,
+                "description": task_data.description,
+                "status": task_data.status,
+                "priority": task_data.priority,
+                "category": task_data.category,
+                "deadline": task_data.deadline,
+                "assigned_to": task_data.assignedTo,
+                "created_at": now,
+                "updated_at": now
+            }
+            
+            self.db.tasks.insert_one(task_doc)
+            
+            return Task(
+                id=str(task_doc["_id"]),
+                title=task_doc["title"],
+                description=task_doc["description"],
+                status=task_doc["status"],
+                priority=task_doc["priority"],
+                category=task_doc["category"],
+                deadline=task_doc["deadline"],
+                assignedTo=task_doc["assigned_to"],
+                createdAt=task_doc["created_at"],
+                updatedAt=task_doc["updated_at"]
             )
-            timeline.append(timeline_item)
-        
-        return timeline
-
-    def _generate_budget_breakdown(self, event_type: str, budget_str: str) -> List[BudgetBreakdown]:
-        """Generate budget breakdown based on event type"""
-        budget_templates = {
-            'wedding': [
-                {'category': 'Venue', 'percentage': 40},
-                {'category': 'Catering', 'percentage': 30},
-                {'category': 'Photography', 'percentage': 10},
-                {'category': 'Flowers & Decorations', 'percentage': 8},
-                {'category': 'Entertainment', 'percentage': 7},
-                {'category': 'Miscellaneous', 'percentage': 5}
-            ],
-            'birthday': [
-                {'category': 'Venue', 'percentage': 35},
-                {'category': 'Catering', 'percentage': 30},
-                {'category': 'Decorations', 'percentage': 20},
-                {'category': 'Entertainment', 'percentage': 10},
-                {'category': 'Miscellaneous', 'percentage': 5}
-            ],
-            'corporate': [
-                {'category': 'Venue', 'percentage': 35},
-                {'category': 'Catering', 'percentage': 25},
-                {'category': 'AV Equipment', 'percentage': 15},
-                {'category': 'Speakers/Presenters', 'percentage': 15},
-                {'category': 'Materials', 'percentage': 5},
-                {'category': 'Miscellaneous', 'percentage': 5}
-            ]
-        }
-        
-        event_type_key = event_type.lower().replace(' ', '')
-        template = budget_templates.get(event_type_key, budget_templates['birthday'])
-        
-        # Extract budget amount
-        total_budget = 10000  # Default
-        try:
-            total_budget = int(''.join(filter(str.isdigit, budget_str))) if budget_str else 10000
-        except:
-            pass
-        
-        breakdown = []
-        for item in template:
-            amount = round((total_budget * item['percentage']) / 100)
-            breakdown.append(BudgetBreakdown(
-                category=item['category'],
-                amount=amount,
-                percentage=item['percentage'],
-                description=f"Budget allocation for {item['category'].lower()}"
-            ))
-        
-        return breakdown
-
-    def _generate_tips(self, event_type: str) -> List[str]:
-        """Generate tips based on event type"""
-        tips_map = {
-            'wedding': [
-                'Book your venue at least 6 months in advance',
-                'Consider a weekday wedding to save costs',
-                'Create a detailed timeline for vendors',
-                'Have a backup plan for outdoor ceremonies',
-                'Delegate tasks to reduce stress'
-            ],
-            'birthday': [
-                'Send invitations 2-3 weeks in advance',
-                'Consider dietary restrictions when planning',
-                'Have backup indoor activities',
-                'Delegate tasks to friends and family',
-                'Take lots of photos'
-            ],
-            'corporate': [
-                'Test all AV equipment beforehand',
-                'Provide clear signage and directions',
-                'Have registration ready with name badges',
-                'Plan networking breaks',
-                'Follow up with attendees after'
-            ]
-        }
-        
-        event_type_key = event_type.lower().replace(' ', '')
-        return tips_map.get(event_type_key, tips_map['birthday'])
-
-    def _generate_checklist(self, event_type: str) -> List[str]:
-        """Generate checklist based on event type"""
-        checklist_map = {
-            'wedding': [
-                'Venue booked and contract signed',
-                'Catering menu finalized',
-                'Photographer confirmed',
-                'Invitations sent and RSVPs tracked',
-                'Marriage license obtained',
-                'Rehearsal dinner planned'
-            ],
-            'birthday': [
-                'Guest list finalized',
-                'Invitations sent',
-                'Venue decorated',
-                'Food and cake ordered',
-                'Entertainment arranged',
-                'Party favors prepared'
-            ],
-            'corporate': [
-                'Venue set up properly',
-                'AV equipment tested',
-                'Catering confirmed',
-                'Speakers briefed',
-                'Registration area prepared',
-                'Materials printed'
-            ]
-        }
-        
-        event_type_key = event_type.lower().replace(' ', '')
-        return checklist_map.get(event_type_key, checklist_map['birthday'])
-
-    def _generate_event_title(self, form_data: EventFormData) -> str:
-        """Generate an event title"""
-        try:
-            date = datetime.fromisoformat(form_data.date.replace('Z', '+00:00'))
-            month_year = date.strftime('%B %Y')
-        except:
-            month_year = 'TBD'
-        
-        return f"{form_data.eventType} - {month_year}"
-
-    def _calculate_status(self, event_date: datetime) -> str:
-        """Calculate event status"""
-        now = datetime.now()
-        days_until_event = (event_date - now).days
-        
-        if days_until_event < 0:
-            return 'Completed'
-        elif days_until_event <= 7:
-            return 'This Week'
-        elif days_until_event <= 30:
-            return 'This Month'
-        else:
-            return 'Planning'
-
-    def _calculate_progress(self, created_date: datetime, event_date: datetime) -> int:
-        """Calculate event progress"""
-        now = datetime.now()
-        total_time = (event_date - created_date).total_seconds()
-        elapsed_time = (now - created_date).total_seconds()
-        
-        if total_time <= 0:
-            return 100
             
-        progress = max(0, min(100, (elapsed_time / total_time) * 100))
-        return round(progress)
+        except Exception as e:
+            logger.error(f"Error creating task for event {event_id}: {e}")
+            raise
 
-# Global instance
-event_service = None
+    async def update_event_task(self, event_id: str, user_id: str, task_id: str, task_update: TaskUpdate) -> Optional[Task]:
+        """Update a specific task"""
+        try:
+            update_data = {k: v for k, v in task_update.dict().items() if v is not None}
+            if "assignedTo" in update_data:
+                update_data["assigned_to"] = update_data.pop("assignedTo")
+            update_data["updated_at"] = datetime.now().isoformat()
+            
+            result = self.db.tasks.update_one(
+                {
+                    "_id": ObjectId(task_id),
+                    "event_id": ObjectId(event_id),
+                    "user_id": ObjectId(user_id)
+                },
+                {"$set": update_data}
+            )
+            
+            if result.modified_count > 0:
+                task = self.db.tasks.find_one({"_id": ObjectId(task_id)})
+                if task:
+                    return Task(
+                        id=str(task["_id"]),
+                        title=task["title"],
+                        description=task["description"],
+                        status=task["status"],
+                        priority=task["priority"],
+                        category=task["category"],
+                        deadline=task["deadline"],
+                        assignedTo=task.get("assigned_to", ""),
+                        createdAt=task["created_at"],
+                        updatedAt=task["updated_at"]
+                    )
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error updating task {task_id}: {e}")
+            return None
 
-def get_event_service(db: Database) -> EventService:
-    """Get or create real event service instance"""
-    global event_service
-    if event_service is None:
-        event_service = EventService(db)
-    return event_service
+    async def delete_event_task(self, event_id: str, user_id: str, task_id: str) -> bool:
+        """Delete a specific task"""
+        try:
+            result = self.db.tasks.delete_one({
+                "_id": ObjectId(task_id),
+                "event_id": ObjectId(event_id),
+                "user_id": ObjectId(user_id)
+            })
+            
+            return result.deleted_count > 0
+            
+        except Exception as e:
+            logger.error(f"Error deleting task {task_id}: {e}")
+            return False
+
+    # Vendor Management Methods
+    async def get_event_vendors(self, event_id: str, user_id: str) -> List[Vendor]:
+        """Get all vendors for a specific event"""
+        try:
+            vendors = list(self.db.vendors.find({
+                "event_id": ObjectId(event_id),
+                "user_id": ObjectId(user_id)
+            }))
+            
+            return [Vendor(
+                id=str(vendor["_id"]),
+                name=vendor.get("name", ""),
+                category=vendor.get("category", ""),
+                contactPerson=vendor.get("contact_person", ""),
+                email=vendor.get("email", ""),
+                phone=vendor.get("phone", ""),
+                address=vendor.get("address", ""),
+                website=vendor.get("website", ""),
+                rating=vendor.get("rating", 0.0),
+                priceRange=vendor.get("price_range", ""),
+                description=vendor.get("description", ""),
+                services=vendor.get("services", []),
+                availability=vendor.get("availability", ""),
+                contractStatus=vendor.get("contract_status", "not_contacted"),
+                quotedPrice=vendor.get("quoted_price", ""),
+                finalPrice=vendor.get("final_price", ""),
+                notes=vendor.get("notes", ""),
+                createdAt=vendor.get("created_at", datetime.now().isoformat()),
+                updatedAt=vendor.get("updated_at", datetime.now().isoformat())
+            ) for vendor in vendors]
+            
+        except Exception as e:
+            logger.error(f"Error fetching vendors for event {event_id}: {e}")
+            return []
+
+    async def create_event_vendor(self, event_id: str, user_id: str, vendor_data: VendorCreate) -> Vendor:
+        """Create a new vendor for an event"""
+        try:
+            now = datetime.now().isoformat()
+            vendor_doc = {
+                "_id": ObjectId(),
+                "event_id": ObjectId(event_id),
+                "user_id": ObjectId(user_id),
+                "name": vendor_data.name,
+                "category": vendor_data.category,
+                "contact_person": vendor_data.contactPerson,
+                "email": vendor_data.email,
+                "phone": vendor_data.phone,
+                "address": vendor_data.address,
+                "website": vendor_data.website,
+                "rating": vendor_data.rating,
+                "price_range": vendor_data.priceRange,
+                "description": vendor_data.description,
+                "services": vendor_data.services,
+                "availability": vendor_data.availability,
+                "contract_status": vendor_data.contractStatus,
+                "quoted_price": vendor_data.quotedPrice,
+                "final_price": vendor_data.finalPrice,
+                "notes": vendor_data.notes,
+                "created_at": now,
+                "updated_at": now
+            }
+            
+            self.db.vendors.insert_one(vendor_doc)
+            
+            return Vendor(
+                id=str(vendor_doc["_id"]),
+                name=vendor_doc["name"],
+                category=vendor_doc["category"],
+                contactPerson=vendor_doc["contact_person"],
+                email=vendor_doc["email"],
+                phone=vendor_doc["phone"],
+                address=vendor_doc["address"],
+                website=vendor_doc["website"],
+                rating=vendor_doc["rating"],
+                priceRange=vendor_doc["price_range"],
+                description=vendor_doc["description"],
+                services=vendor_doc["services"],
+                availability=vendor_doc["availability"],
+                contractStatus=vendor_doc["contract_status"],
+                quotedPrice=vendor_doc["quoted_price"],
+                finalPrice=vendor_doc["final_price"],
+                notes=vendor_doc["notes"],
+                createdAt=vendor_doc["created_at"],
+                updatedAt=vendor_doc["updated_at"]
+            )
+            
+        except Exception as e:
+            logger.error(f"Error creating vendor for event {event_id}: {e}")
+            raise
+
+    async def update_event_vendor(self, event_id: str, user_id: str, vendor_id: str, vendor_update: VendorUpdate) -> Optional[Vendor]:
+        """Update a specific vendor"""
+        try:
+            update_data = {k: v for k, v in vendor_update.dict().items() if v is not None}
+            # Convert camelCase to snake_case for database fields
+            field_mapping = {
+                "contactPerson": "contact_person",
+                "priceRange": "price_range",
+                "contractStatus": "contract_status",
+                "quotedPrice": "quoted_price",
+                "finalPrice": "final_price"
+            }
+            
+            for old_key, new_key in field_mapping.items():
+                if old_key in update_data:
+                    update_data[new_key] = update_data.pop(old_key)
+            
+            update_data["updated_at"] = datetime.now().isoformat()
+            
+            result = self.db.vendors.update_one(
+                {
+                    "_id": ObjectId(vendor_id),
+                    "event_id": ObjectId(event_id),
+                    "user_id": ObjectId(user_id)
+                },
+                {"$set": update_data}
+            )
+            
+            if result.modified_count > 0:
+                vendor = self.db.vendors.find_one({"_id": ObjectId(vendor_id)})
+                if vendor:
+                    return Vendor(
+                        id=str(vendor["_id"]),
+                        name=vendor["name"],
+                        category=vendor["category"],
+                        contactPerson=vendor.get("contact_person", ""),
+                        email=vendor["email"],
+                        phone=vendor["phone"],
+                        address=vendor["address"],
+                        website=vendor.get("website", ""),
+                        rating=vendor["rating"],
+                        priceRange=vendor["price_range"],
+                        description=vendor["description"],
+                        services=vendor["services"],
+                        availability=vendor["availability"],
+                        contractStatus=vendor["contract_status"],
+                        quotedPrice=vendor.get("quoted_price", ""),
+                        finalPrice=vendor.get("final_price", ""),
+                        notes=vendor.get("notes", ""),
+                        createdAt=vendor["created_at"],
+                        updatedAt=vendor["updated_at"]
+                    )
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error updating vendor {vendor_id}: {e}")
+            return None
+
+    async def delete_event_vendor(self, event_id: str, user_id: str, vendor_id: str) -> bool:
+        """Delete a specific vendor"""
+        try:
+            result = self.db.vendors.delete_one({
+                "_id": ObjectId(vendor_id),
+                "event_id": ObjectId(event_id),
+                "user_id": ObjectId(user_id)
+            })
+            
+            return result.deleted_count > 0
+            
+        except Exception as e:
+            logger.error(f"Error deleting vendor {vendor_id}: {e}")
+            return False
+
+    # Guest Management Methods
+    async def get_event_guests(self, event_id: str, user_id: str) -> List[Guest]:
+        """Get all guests for a specific event"""
+        try:
+            guests = list(self.db.guests.find({
+                "event_id": ObjectId(event_id),
+                "user_id": ObjectId(user_id)
+            }))
+            
+            return [Guest(
+                id=str(guest["_id"]),
+                name=guest.get("name", ""),
+                email=guest.get("email", ""),
+                phone=guest.get("phone", ""),
+                rsvpStatus=guest.get("rsvp_status", "pending"),
+                dietaryRestrictions=guest.get("dietary_restrictions", ""),
+                plusOne=guest.get("plus_one", False),
+                plusOneName=guest.get("plus_one_name", ""),
+                tableAssignment=guest.get("table_assignment", ""),
+                specialRequests=guest.get("special_requests", ""),
+                invitationSent=guest.get("invitation_sent", False),
+                invitationSentDate=guest.get("invitation_sent_date", ""),
+                rsvpDate=guest.get("rsvp_date", ""),
+                createdAt=guest.get("created_at", datetime.now().isoformat()),
+                updatedAt=guest.get("updated_at", datetime.now().isoformat())
+            ) for guest in guests]
+            
+        except Exception as e:
+            logger.error(f"Error fetching guests for event {event_id}: {e}")
+            return []
+
+    async def create_event_guest(self, event_id: str, user_id: str, guest_data: GuestCreate) -> Guest:
+        """Create a new guest for an event"""
+        try:
+            now = datetime.now().isoformat()
+            guest_doc = {
+                "_id": ObjectId(),
+                "event_id": ObjectId(event_id),
+                "user_id": ObjectId(user_id),
+                "name": guest_data.name,
+                "email": guest_data.email,
+                "phone": guest_data.phone,
+                "rsvp_status": guest_data.rsvpStatus,
+                "dietary_restrictions": guest_data.dietaryRestrictions,
+                "plus_one": guest_data.plusOne,
+                "plus_one_name": guest_data.plusOneName,
+                "table_assignment": guest_data.tableAssignment,
+                "special_requests": guest_data.specialRequests,
+                "invitation_sent": guest_data.invitationSent,
+                "invitation_sent_date": guest_data.invitationSentDate,
+                "rsvp_date": guest_data.rsvpDate,
+                "created_at": now,
+                "updated_at": now
+            }
+            
+            self.db.guests.insert_one(guest_doc)
+            
+            return Guest(
+                id=str(guest_doc["_id"]),
+                name=guest_doc["name"],
+                email=guest_doc["email"],
+                phone=guest_doc["phone"],
+                rsvpStatus=guest_doc["rsvp_status"],
+                dietaryRestrictions=guest_doc["dietary_restrictions"],
+                plusOne=guest_doc["plus_one"],
+                plusOneName=guest_doc["plus_one_name"],
+                tableAssignment=guest_doc["table_assignment"],
+                specialRequests=guest_doc["special_requests"],
+                invitationSent=guest_doc["invitation_sent"],
+                invitationSentDate=guest_doc["invitation_sent_date"],
+                rsvpDate=guest_doc["rsvp_date"],
+                createdAt=guest_doc["created_at"],
+                updatedAt=guest_doc["updated_at"]
+            )
+            
+        except Exception as e:
+            logger.error(f"Error creating guest for event {event_id}: {e}")
+            raise
+
+    async def update_event_guest(self, event_id: str, user_id: str, guest_id: str, guest_update: GuestUpdate) -> Optional[Guest]:
+        """Update a specific guest"""
+        try:
+            update_data = {k: v for k, v in guest_update.dict().items() if v is not None}
+            # Convert camelCase to snake_case for database fields
+            field_mapping = {
+                "rsvpStatus": "rsvp_status",
+                "dietaryRestrictions": "dietary_restrictions",
+                "plusOne": "plus_one",
+                "plusOneName": "plus_one_name",
+                "tableAssignment": "table_assignment",
+                "specialRequests": "special_requests",
+                "invitationSent": "invitation_sent",
+                "invitationSentDate": "invitation_sent_date",
+                "rsvpDate": "rsvp_date"
+            }
+            
+            for old_key, new_key in field_mapping.items():
+                if old_key in update_data:
+                    update_data[new_key] = update_data.pop(old_key)
+            
+            update_data["updated_at"] = datetime.now().isoformat()
+            
+            result = self.db.guests.update_one(
+                {
+                    "_id": ObjectId(guest_id),
+                    "event_id": ObjectId(event_id),
+                    "user_id": ObjectId(user_id)
+                },
+                {"$set": update_data}
+            )
+            
+            if result.modified_count > 0:
+                guest = self.db.guests.find_one({"_id": ObjectId(guest_id)})
+                if guest:
+                    return Guest(
+                        id=str(guest["_id"]),
+                        name=guest["name"],
+                        email=guest["email"],
+                        phone=guest.get("phone", ""),
+                        rsvpStatus=guest["rsvp_status"],
+                        dietaryRestrictions=guest.get("dietary_restrictions", ""),
+                        plusOne=guest["plus_one"],
+                        plusOneName=guest.get("plus_one_name", ""),
+                        tableAssignment=guest.get("table_assignment", ""),
+                        specialRequests=guest.get("special_requests", ""),
+                        invitationSent=guest["invitation_sent"],
+                        invitationSentDate=guest.get("invitation_sent_date", ""),
+                        rsvpDate=guest.get("rsvp_date", ""),
+                        createdAt=guest["created_at"],
+                        updatedAt=guest["updated_at"]
+                    )
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error updating guest {guest_id}: {e}")
+            return None
+
+    async def delete_event_guest(self, event_id: str, user_id: str, guest_id: str) -> bool:
+        """Delete a specific guest"""
+        try:
+            result = self.db.guests.delete_one({
+                "_id": ObjectId(guest_id),
+                "event_id": ObjectId(event_id),
+                "user_id": ObjectId(user_id)
+            })
+            
+            return result.deleted_count > 0
+            
+        except Exception as e:
+            logger.error(f"Error deleting guest {guest_id}: {e}")
+            return False
+
+    # Budget Management Methods
+    async def get_event_budget(self, event_id: str, user_id: str) -> BudgetSummary:
+        """Get budget summary for a specific event"""
+        try:
+            # Get budget items for this event
+            budget_items = list(self.db.budget_items.find({
+                "event_id": ObjectId(event_id),
+                "user_id": ObjectId(user_id)
+            }))
+            
+            # Convert to BudgetItem objects
+            items = [BudgetItem(
+                id=str(item["_id"]),
+                category=item.get("category", ""),
+                item=item.get("item", ""),
+                estimatedCost=item.get("estimated_cost", 0.0),
+                actualCost=item.get("actual_cost"),
+                vendor=item.get("vendor", ""),
+                status=item.get("status", "planned"),
+                notes=item.get("notes", ""),
+                createdAt=item.get("created_at", datetime.now().isoformat()),
+                updatedAt=item.get("updated_at", datetime.now().isoformat())
+            ) for item in budget_items]
+            
+            # Calculate totals
+            total_estimated = sum(item.estimatedCost for item in items)
+            total_spent = sum(item.actualCost or 0 for item in items)
+            total_remaining = total_estimated - total_spent
+            
+            # Create category breakdown
+            category_totals = {}
+            for item in items:
+                if item.category not in category_totals:
+                    category_totals[item.category] = {"estimated": 0, "spent": 0}
+                category_totals[item.category]["estimated"] += item.estimatedCost
+                category_totals[item.category]["spent"] += item.actualCost or 0
+            
+            category_breakdown = []
+            for category, totals in category_totals.items():
+                percentage = round((totals["estimated"] / total_estimated) * 100) if total_estimated > 0 else 0
+                category_breakdown.append(BudgetBreakdown(
+                    category=category,
+                    amount=int(totals["estimated"]),
+                    percentage=percentage,
+                    description=f"Budget allocation for {category.lower()}"
+                ))
+            
+            return BudgetSummary(
+                totalBudget=total_estimated,
+                totalSpent=total_spent,
+                totalRemaining=total_remaining,
+                categoryBreakdown=category_breakdown,
+                items=items
+            )
+            
+        except Exception as e:
+            logger.error(f"Error fetching budget for event {event_id}: {e}")
+            return BudgetSummary(
+                totalBudget=0.0,
+                totalSpent=0.0,
+                totalRemaining=0.0,
+                categoryBreakdown=[],
+                items=[]
+            )
+
+    async def create_budget_item(self, event_id: str, item_data: BudgetItemCreate, user_id: str) -> BudgetItem:
+        """Create a new budget item for an event"""
+        try:
+            now = datetime.now().isoformat()
+            item_doc = {
+                "_id": ObjectId(),
+                "event_id": ObjectId(event_id),
+                "user_id": ObjectId(user_id),
+                "category": item_data.category,
+                "item": item_data.item,
+                "estimated_cost": item_data.estimatedCost,
+                "actual_cost": None,
+                "vendor": item_data.vendor,
+                "status": "planned",
+                "notes": item_data.notes,
+                "created_at": now,
+                "updated_at": now
+            }
+            
+            self.db.budget_items.insert_one(item_doc)
+            
+            return BudgetItem(
+                id=str(item_doc["_id"]),
+                category=item_doc["category"],
+                item=item_doc["item"],
+                estimatedCost=item_doc["estimated_cost"],
+                actualCost=item_doc["actual_cost"],
+                vendor=item_doc["vendor"],
+                status=item_doc["status"],
+                notes=item_doc["notes"],
+                createdAt=item_doc["created_at"],
+                updatedAt=item_doc["updated_at"]
+            )
+            
+        except Exception as e:
+            logger.error(f"Error creating budget item for event {event_id}: {e}")
+            raise
+
+    async def update_budget_item(self, event_id: str, item_id: str, item_update: BudgetItemUpdate, user_id: str) -> Optional[BudgetItem]:
+        """Update a specific budget item"""
+        try:
+            update_data = {k: v for k, v in item_update.dict().items() if v is not None}
+            # Convert camelCase to snake_case for database fields
+            field_mapping = {
+                "estimatedCost": "estimated_cost",
+                "actualCost": "actual_cost"
+            }
+            
+            for old_key, new_key in field_mapping.items():
+                if old_key in update_data:
+                    update_data[new_key] = update_data.pop(old_key)
+            
+            update_data["updated_at"] = datetime.now().isoformat()
+            
+            result = self.db.budget_items.update_one(
+                {
+                    "_id": ObjectId(item_id),
+                    "event_id": ObjectId(event_id),
+                    "user_id": ObjectId(user_id)
+                },
+                {"$set": update_data}
+            )
+            
+            if result.modified_count > 0:
+                item = self.db.budget_items.find_one({"_id": ObjectId(item_id)})
+                if item:
+                    return BudgetItem(
+                        id=str(item["_id"]),
+                        category=item["category"],
+                        item=item["item"],
+                        estimatedCost=item["estimated_cost"],
+                        actualCost=item.get("actual_cost"),
+                        vendor=item.get("vendor", ""),
+                        status=item["status"],
+                        notes=item.get("notes", ""),
+                        createdAt=item["created_at"],
+                        updatedAt=item["updated_at"]
+                    )
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error updating budget item {item_id}: {e}")
+            return None
+
+    async def delete_budget_item(self, event_id: str, item_id: str, user_id: str) -> bool:
+        """Delete a specific budget item"""
+        try:
+            result = self.db.budget_items.delete_one({
+                "_id": ObjectId(item_id),
+                "event_id": ObjectId(event_id),
+                "user_id": ObjectId(user_id)
+            })
+            
+            return result.deleted_count > 0
+            
+        except Exception as e:
+            logger.error(f"Error deleting budget item {item_id}: {e}")
+            return False

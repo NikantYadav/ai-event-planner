@@ -276,6 +276,25 @@ async def update_event_task(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update task: {str(e)}")
 
+@event_router.delete("/{event_id}/tasks/{task_id}")
+async def delete_event_task(
+    event_id: str,
+    task_id: str,
+    current_user=Depends(get_current_user),
+    db: Database = Depends(get_db)
+):
+    """Delete a specific task"""
+    try:
+        service = get_event_service(db)
+        success = await service.delete_event_task(event_id, str(current_user["_id"]), task_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Task not found")
+        return {"message": "Task deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete task: {str(e)}")
+
 # Vendor Management Endpoints
 @event_router.get("/{event_id}/vendors", response_model=List[Vendor])
 async def get_event_vendors(
@@ -325,6 +344,25 @@ async def update_event_vendor(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update vendor: {str(e)}")
+
+@event_router.delete("/{event_id}/vendors/{vendor_id}")
+async def delete_event_vendor(
+    event_id: str,
+    vendor_id: str,
+    current_user=Depends(get_current_user),
+    db: Database = Depends(get_db)
+):
+    """Delete a specific vendor"""
+    try:
+        service = get_event_service(db)
+        success = await service.delete_event_vendor(event_id, str(current_user["_id"]), vendor_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Vendor not found")
+        return {"message": "Vendor deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete vendor: {str(e)}")
 
 # Guest & RSVP Management Endpoints
 @event_router.get("/{event_id}/guests", response_model=List[Guest])
@@ -376,6 +414,25 @@ async def update_event_guest(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update guest: {str(e)}")
 
+@event_router.delete("/{event_id}/guests/{guest_id}")
+async def delete_event_guest(
+    event_id: str,
+    guest_id: str,
+    current_user=Depends(get_current_user),
+    db: Database = Depends(get_db)
+):
+    """Delete a specific guest"""
+    try:
+        service = get_event_service(db)
+        success = await service.delete_event_guest(event_id, str(current_user["_id"]), guest_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Guest not found")
+        return {"message": "Guest deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete guest: {str(e)}")
+
 # Budget Management Endpoints
 @event_router.get("/{event_id}/budget", response_model=BudgetSummary)
 async def get_event_budget(
@@ -425,6 +482,25 @@ async def update_budget_item(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update budget item: {str(e)}")
+
+@event_router.delete("/{event_id}/budget/items/{item_id}")
+async def delete_budget_item(
+    event_id: str,
+    item_id: str,
+    current_user=Depends(get_current_user),
+    db: Database = Depends(get_db)
+):
+    """Delete a specific budget item"""
+    try:
+        service = get_event_service(db)
+        success = await service.delete_budget_item(event_id, item_id, str(current_user["_id"]))
+        if not success:
+            raise HTTPException(status_code=404, detail="Budget item not found")
+        return {"message": "Budget item deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete budget item: {str(e)}")
 
 # Health check for events service
 @event_router.get("/health/check")
