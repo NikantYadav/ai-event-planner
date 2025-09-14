@@ -897,3 +897,7 @@ class EventService:
         except Exception as e:
             logger.error(f"Error deleting budget item {item_id}: {e}")
             return False
+        
+def get_event_service(db: Database) -> EventService:
+    """Factory function to create EventService instance"""
+    return EventService(db)
