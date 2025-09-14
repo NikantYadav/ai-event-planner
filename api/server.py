@@ -1,13 +1,17 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from mongo import app, get_db
-from fastapi import Depends
 from pymongo.database import Database
+from mongo import lifespan, get_db
 from routes import auth_router
 from event_routes import event_router
 
-app = FastAPI(title="ai-event-planner API")
+app = FastAPI(
+    title="AI Event Planner API",
+    description="AI-powered event planning service",
+    version="1.0.0",
+    lifespan=lifespan
+)
 
 # Enable CORS for all origins (adjust origins as needed)
 app.add_middleware(
