@@ -1,17 +1,20 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import List
 from pymongo.database import Database
-from event_models import (
+from api.event_models import (
     EventFormData, EventPlanResponse, EventPlanSummary, EventPlanUpdate,
     Task, TaskCreate, TaskUpdate, Vendor, VendorCreate, VendorUpdate,
     Guest, GuestCreate, GuestUpdate, BudgetSummary, BudgetItem, 
     BudgetItemCreate, BudgetItemUpdate
 )
-from real_event_service import get_event_service
-from routes import get_current_user
-from mongo import get_db
+from api.event_service import get_event_service
+from api.routes import get_current_user
+from api.mongo import get_db
 import re
 from datetime import datetime
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 # Create router for event planning endpoints
 event_router = APIRouter(prefix="/api/events", tags=["events"])
@@ -64,7 +67,8 @@ def validate_event_input(form_data: EventFormData) -> EventFormData:
         date=sanitize_string(form_data.date),
         budget=sanitize_string(form_data.budget) if form_data.budget else "",
         guestCount=sanitize_string(form_data.guestCount) if form_data.guestCount else "",
-        duration=sanitize_string(form_data.duration) if form_data.duration else ""
+        duration=sanitize_string(form_data.duration) if form_data.duration else "",
+        geminiApiKeys=form_data.geminiApiKeys if hasattr(form_data, 'geminiApiKeys') else []
     )
     
     return sanitized_data
@@ -81,9 +85,19 @@ async def generate_event_plan(
         # Validate and sanitize input
         form_data = validate_event_input(form_data)
         
+        # Validate Gemini API keys (if provided)
+        api_keys = form_data.geminiApiKeys or []
+        if api_keys:
+            # Limit to 5 keys max
+            if len(api_keys) > 5:
+                logger.warning(f"Too many API keys provided ({len(api_keys)}), limiting to 5")
+                form_data.geminiApiKeys = api_keys[:5]
+            
+            # Remove any empty keys
+            form_data.geminiApiKeys = [key for key in api_keys if key and key.strip()]
+        
         service = get_event_service(db)
         event_plan = await service.generate_event_plan(form_data, str(current_user["_id"]))
-        
         
         return event_plan
     except HTTPException:

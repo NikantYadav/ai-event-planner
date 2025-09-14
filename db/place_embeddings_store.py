@@ -5,7 +5,7 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-def store_places_to_tidb(places_data: List[dict], table_name: str = "place_embeddings"):
+def store_places_to_tidb(places_data: List[dict], table_name: str = "place_embeddings", api_keys=None):
     """Function to store place embeddings in TiDB using multithreaded embedding generation."""
     # Create vector store
     vector_store = TiDBVectorStore(table_name)
@@ -15,7 +15,7 @@ def store_places_to_tidb(places_data: List[dict], table_name: str = "place_embed
     
     # Convert places to embeddings using multithreading
     logger.info(f"Converting {len(places_data)} places to embeddings...")
-    embeddings_data = convert_places_to_embeddings(places_data)
+    embeddings_data = convert_places_to_embeddings(places_data, api_keys=api_keys)
     
     if not embeddings_data:
         logger.warning("No embeddings generated")

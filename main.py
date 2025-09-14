@@ -37,8 +37,9 @@ def llm_vendor_type(user_event_description):
 
         match = re.search(r"\{.*\}", response, re.DOTALL)
         if not match:
-            raise GeminiLLMError("No valid JSON found in LLM response")
-
+            logger.error('No valid JSON object found in LLM response')
+            return None
+    
         json_str = match.group(0).strip()
 
         # Parse into dict
@@ -164,13 +165,13 @@ def places_api_call(search_queries: List[Dict[str, Any]], location: str = None) 
         logger.error(f"places_api_call failed: {e}", exc_info=True)
         return []
 
-def semantic_match(user_event_description, places_data: List[Dict[str, Any]], limit: int = 10) -> Dict[str, List[str]]:
+def semantic_match(user_event_description, places_data: List[Dict[str, Any]], limit: int = 10, api_keys=None) -> Dict[str, List[str]]:
     """
     User input + vendor combination vector match/ranking
     """
     try:
         # Generate embedding for user input
-        embedding_api = GeminiEmbeddingsAPI()
+        embedding_api = GeminiEmbeddingsAPI(user_api_keys=api_keys)
         user_input_embedding = embedding_api.generate_embedding(user_event_description)
         if not user_input_embedding:
             logger.error("Failed to generate embedding for user input")
@@ -204,7 +205,8 @@ def semantic_match(user_event_description, places_data: List[Dict[str, Any]], li
                 nearest_place_ids = find_nearest_embeddings(
                     user_input_embedding, 
                     limit=limit, 
-                    filter_place_ids=place_ids
+                    filter_place_ids=place_ids,
+                    api_keys=api_keys
                 )
                 
                 results[vendor_type] = nearest_place_ids

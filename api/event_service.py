@@ -10,13 +10,16 @@ from datetime import datetime, timedelta
 from pymongo.database import Database
 from bson import ObjectId
 
-from event_models import (
+from api.event_models import (
     EventFormData, EventPlanResponse, EventPlanSummary, 
     VendorRecommendation, TimelineItem, BudgetBreakdown,
     Task, TaskCreate, TaskUpdate, Vendor, VendorCreate, VendorUpdate,
     Guest, GuestCreate, GuestUpdate, BudgetSummary, BudgetItem,
     BudgetItemCreate, BudgetItemUpdate
 )
+
+from utils.logger import get_logger
+logger = get_logger(__name__)
 
 # Import AI pipeline functions
 import sys
@@ -65,6 +68,11 @@ class EventService:
             
             if AI_AVAILABLE:
                 try:
+                    # Extract API keys if provided
+                    api_keys = form_data.geminiApiKeys if hasattr(form_data, 'geminiApiKeys') else None
+                    if api_keys:
+                        logger.info(f"Using {len(api_keys)} user-provided API keys")
+                    
                     # Step 1: Analyze vendor types using AI
                     logger.info("Analyzing vendor types with AI...")
                     vendor_categories = llm_vendor_type(form_data.description)
@@ -82,12 +90,12 @@ class EventService:
                             if places_results:
                                 # Step 4: Store places in TiDB and perform semantic matching
                                 logger.info("Storing places in TiDB...")
-                                successful, failed = store_places_to_tidb(places_results)
+                                successful, failed = store_places_to_tidb(places_results, api_keys=api_keys)
                                 logger.info(f"Stored {successful} places, {failed} failed")
                                 
                                 # Perform semantic matching
                                 logger.info("Performing semantic matching...")
-                                semantic_results = semantic_match(form_data.description, places_results, limit=6)
+                                semantic_results = semantic_match(form_data.description, places_results, limit=6, api_keys=api_keys)
                                 
                                 # Convert places to vendor recommendations
                                 vendors = self._convert_places_to_vendors(places_results, semantic_results)

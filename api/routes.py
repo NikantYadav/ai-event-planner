@@ -8,8 +8,8 @@ import os
 from pymongo.database import Database
 from pymongo.errors import DuplicateKeyError
 from bson import ObjectId
-from models import UserSignup, UserLogin, UserResponse, Token
-from mongo import get_db
+from api.models import UserSignup, UserLogin, UserResponse, Token
+from api.mongo import get_db
 
 # Initialize router
 auth_router = APIRouter(prefix="/auth", tags=["Authentication"])

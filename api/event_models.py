@@ -11,6 +11,7 @@ class EventFormData(BaseModel):
     budget: str
     guestCount: str
     duration: str
+    geminiApiKeys: Optional[List[str]] = []  # Allow user to provide up to 5 Gemini API keys
 
 class VendorRecommendation(BaseModel):
     id: str

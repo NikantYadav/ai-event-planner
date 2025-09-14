@@ -2,9 +2,9 @@ from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from pymongo.database import Database
-from mongo import lifespan, get_db
-from routes import auth_router
-from event_routes import event_router
+from api.mongo import lifespan, get_db
+from api.routes import auth_router
+from api.event_routes import event_router
 
 app = FastAPI(
     title="AI Event Planner API",

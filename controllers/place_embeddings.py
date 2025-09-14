@@ -6,12 +6,12 @@ from utils.logger import get_logger
 import json
 logger = get_logger(__name__)
 
-def convert_places_to_embeddings(places_data: List[dict]) -> List[Tuple[List[float], str]]:
+def convert_places_to_embeddings(places_data: List[dict], api_keys=None) -> List[Tuple[List[float], str]]:
     """Convert places API results to embeddings using multithreading."""
     if not places_data:
         return []
     
-    embeddings_api = GeminiEmbeddingsAPI()
+    embeddings_api = GeminiEmbeddingsAPI(user_api_keys=api_keys)
     
     # Prepare text data and place IDs
     texts_and_ids = []
@@ -61,7 +61,7 @@ def convert_places_to_embeddings(places_data: List[dict]) -> List[Tuple[List[flo
     logger.info(f"Generated embeddings for {len(results)}/{len(places_data)} places")
     return results
 
-def find_nearest_embeddings(target_embedding: List[float], limit: int = 10, filter_place_ids: List[str] = None) -> List[str]:
+def find_nearest_embeddings(target_embedding: List[float], limit: int = 10, filter_place_ids: List[str] = None, api_keys=None) -> List[str]:
     """Find the nearest embeddings to a target embedding using TiDB vector similarity search."""
     vector_store = TiDBVectorStore()
     connection = vector_store.get_connection()
